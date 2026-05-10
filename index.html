@@ -9,16 +9,17 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #222; }
-  input, textarea, button, select { font-family: inherit; }
+  html { font-size: clamp(13px, 1vw, 18px); }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #222; font-size: 1rem; }
+  input, textarea, button, select { font-family: inherit; font-size: inherit; }
   button { cursor: pointer; }
   ::-webkit-scrollbar { height: 6px; width: 6px; }
   ::-webkit-scrollbar-track { background: #f1f1f1; }
   ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
-  .nav-btn { padding:5px 12px; font-size:12px; border:0.5px solid #ccc; border-radius:8px; cursor:pointer; background:transparent; color:#555; }
-  .nav-btn:hover { background:#f5f5f3; }
-  th.col-head { padding:6px 8px; font-weight:500; font-size:11px; color:#888; border-bottom:0.5px solid #e5e5e5; text-align:left; white-space:nowrap; background:#f8f8f6; }
-  .saving-dot { width:7px; height:7px; border-radius:50%; background:#B1BA1D; display:inline-block; margin-left:6px; animation:pulse 1.2s infinite; }
+  .nav-btn { padding: 0.35em 0.9em; font-size: 0.8rem; border: 0.5px solid #ccc; border-radius: 8px; cursor: pointer; background: transparent; color: #555; }
+  .nav-btn:hover { background: #f5f5f3; }
+  th.col-head { padding: 0.45em 0.6em; font-weight: 500; font-size: 0.72rem; color: #888; border-bottom: 0.5px solid #e5e5e5; text-align: left; white-space: nowrap; background: #f8f8f6; }
+  .saving-dot { width: 7px; height: 7px; border-radius: 50%; background: #B1BA1D; display: inline-block; margin-left: 6px; animation: pulse 1.2s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 </style>
 </head>
@@ -27,55 +28,52 @@
 <script type="text/babel">
 const { useState, useRef, useEffect, useCallback } = React;
 
-// ── Supabase config ───────────────────────────────────────────────────────────
+// ── Supabase ──────────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://hgsihvqifuikmhmxprik.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhnc2lodnFpZnVpa21obXhwcmlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0MjUyMzMsImV4cCI6MjA5NDAwMTIzM30.35xj9jkOzaSTSyIED0rCi4Rww6ShJ7W8EzSeCVIq-no';
-const HEADERS = { 'Content-Type':'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'resolution=merge-duplicates' };
+const HEADERS = { 'Content-Type':'application/json', 'apikey':SUPABASE_KEY, 'Authorization':`Bearer ${SUPABASE_KEY}`, 'Prefer':'resolution=merge-duplicates' };
 
 async function dbGetProjects() {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/wg_projects?select=id,data&order=id`, { headers: HEADERS });
   if (!r.ok) return null;
   const rows = await r.json();
-  // rows is [{id, data}] — data contains the full project object; return ordered by the stored order field
   return rows.map(row => row.data).sort((a,b) => (a._order||0)-(b._order||0));
 }
-
 async function dbSaveProjects(projects) {
-  // Store each project as a row; embed order index into data
-  const rows = projects.map((p, i) => ({ id: p.id, data: {...p, _order: i}, updated_at: new Date().toISOString() }));
-  await fetch(`${SUPABASE_URL}/rest/v1/wg_projects`, { method:'POST', headers: HEADERS, body: JSON.stringify(rows) });
+  const rows = projects.map((p,i) => ({ id:p.id, data:{...p,_order:i}, updated_at:new Date().toISOString() }));
+  await fetch(`${SUPABASE_URL}/rest/v1/wg_projects`, { method:'POST', headers:HEADERS, body:JSON.stringify(rows) });
 }
-
 async function dbDeleteProject(id) {
-  await fetch(`${SUPABASE_URL}/rest/v1/wg_projects?id=eq.${id}`, { method:'DELETE', headers: HEADERS });
+  await fetch(`${SUPABASE_URL}/rest/v1/wg_projects?id=eq.${id}`, { method:'DELETE', headers:HEADERS });
 }
-
 async function dbGetMilestones() {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/wg_milestones?select=project_id,data`, { headers: HEADERS });
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/wg_milestones?select=project_id,data`, { headers:HEADERS });
   if (!r.ok) return {};
   const rows = await r.json();
   const result = {};
   rows.forEach(row => { result[row.project_id] = row.data; });
   return result;
 }
-
 async function dbSaveMilestones(projectId, weekData) {
   await fetch(`${SUPABASE_URL}/rest/v1/wg_milestones`, {
-    method:'POST', headers: HEADERS,
-    body: JSON.stringify([{ project_id: projectId, data: weekData, updated_at: new Date().toISOString() }])
+    method:'POST', headers:HEADERS,
+    body:JSON.stringify([{ project_id:projectId, data:weekData, updated_at:new Date().toISOString() }])
   });
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const PALETTE = ['#0081AD','#B1BA1D','#F57A29','#E24B4A','#534AB7','#1D9E75','#BA7517','#D4537E','#378ADD','#5F5E5A'];
+
+// Sorted alphabetically
 const ALL_PEOPLE = [
-  'Mark','Brendon','Todd','Piri','Bryn','Marcus','Kyle',
-  'Dan','Gareth','Megan','Joseph','Emma','Adam','Ihaka',
-  'Liam','Jeremy','Konny','Yuxing',
-  'Ash','Yaf','Stacey','Ellen','Ian','Hannah','Katie',
-  'Jae','Vinal','Aaron','Elliot','Cam',
-];
+  'Aaron','Adam','Ash','Brendon','Bryn','Cam','Dan','Ellen','Elliott',
+  'Emma','Gareth','Hannah','Ihaka','Ian','Jae','Jeremy','Joseph',
+  'Joseph','Katie','Konny','Kyle','Liam','Marcus','Mark','Megan',
+  'Piri','Stacey','Todd','Vinal','Yaf','Yuxing',
+].filter((v,i,a)=>a.indexOf(v)===i).sort();
+
 const TODAY = new Date(); TODAY.setHours(0,0,0,0);
+
 const WEEKLY_COUNTS = {
   'V2E': {'2026-01-16':3,'2026-01-23':3,'2026-01-30':10,'2026-02-06':11,'2026-02-13':12,'2026-02-20':24,'2026-02-27':15,'2026-03-06':10,'2026-03-13':15,'2026-03-20':2,'2026-03-27':3,'2026-04-03':10,'2026-04-10':16,'2026-04-17':6,'2026-04-24':8},
   'LiKe': {'2026-01-23':4,'2026-01-30':3,'2026-02-06':6,'2026-02-13':5,'2026-02-20':7,'2026-02-27':4,'2026-03-06':9,'2026-03-13':8,'2026-03-20':6,'2026-03-27':5,'2026-04-03':4,'2026-04-10':9,'2026-04-17':8,'2026-04-24':9},
@@ -86,6 +84,7 @@ const WEEKLY_COUNTS = {
   'ZAV / Zavanti': {'2026-02-20':2,'2026-03-06':1,'2026-03-20':2,'2026-03-27':3,'2026-04-03':3,'2026-04-10':3,'2026-04-17':2},
   'Risk Reporting': {'2026-01-23':1,'2026-02-06':5,'2026-02-13':2,'2026-02-20':6,'2026-02-27':1,'2026-03-06':1,'2026-04-03':1,'2026-04-10':1,'2026-04-17':3,'2026-04-24':6},
 };
+
 const DEFAULT_PROJECTS = [
   { id:1, name:'V2E', people:['Dan','Megan','Joseph','Hannah'], color:'#0081AD', startDate:fmtIso(addDays(TODAY,-120)), endDate:fmtIso(addDays(TODAY,45)) },
   { id:2, name:'LiKe', people:['Gareth','Emma','Adam'], color:'#B1BA1D', startDate:fmtIso(addDays(TODAY,-90)), endDate:fmtIso(addDays(TODAY,90)) },
@@ -108,36 +107,53 @@ function weekKey(d) { return fmtIso(getFridayOf(d)); }
 function nextWeekKey(k) { return weekKey(addDays(parseIso(k),7)); }
 function getFridays(offset) { const base=getFridayOf(TODAY); const start=addDays(base,offset*7); return [0,1,2,3,4,5].map(i=>addDays(start,i*7)); }
 
-// debounce helper
 function useDebouncedCallback(fn, delay) {
   const timer = useRef(null);
-  return useCallback((...args) => {
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => fn(...args), delay);
-  }, [fn, delay]);
+  return useCallback((...args) => { clearTimeout(timer.current); timer.current = setTimeout(()=>fn(...args), delay); }, [fn, delay]);
 }
 
-// ── People picker ─────────────────────────────────────────────────────────────
+// ── People picker — opens upward when near bottom of viewport ─────────────────
 function PeoplePicker({ selected, onChange }) {
   const [open, setOpen] = useState(false);
+  const [openUp, setOpenUp] = useState(false);
   const ref = useRef(null);
+  const triggerRef = useRef(null);
+
   useEffect(() => {
     const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h);
   }, []);
+
+  const handleOpen = () => {
+    if (!open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      setOpenUp(spaceBelow < 280); // picker is ~260px tall
+    }
+    setOpen(o => !o);
+  };
+
   const toggle = name => onChange(selected.includes(name) ? selected.filter(n=>n!==name) : [...selected, name]);
+
   return (
     <div ref={ref} style={{position:'relative'}}>
-      <div onClick={()=>setOpen(o=>!o)} style={{cursor:'pointer',display:'flex',flexWrap:'wrap',gap:3,alignItems:'center',minHeight:24}}>
-        {selected.length===0 ? <span style={{fontSize:11,color:'#ccc'}}>Add people…</span>
-          : selected.map(n=><span key={n} style={{fontSize:10,padding:'1px 6px',borderRadius:20,background:'#e6f1fb',color:'#185FA5',fontWeight:500}}>{n}</span>)}
-        <span style={{fontSize:10,color:'#bbb',marginLeft:2}}>▾</span>
+      <div ref={triggerRef} onClick={handleOpen} style={{cursor:'pointer',display:'flex',flexWrap:'wrap',gap:3,alignItems:'center',minHeight:24}}>
+        {selected.length===0
+          ? <span style={{fontSize:'0.72rem',color:'#ccc'}}>Add people…</span>
+          : selected.map(n=><span key={n} style={{fontSize:'0.68rem',padding:'1px 6px',borderRadius:20,background:'#e6f1fb',color:'#185FA5',fontWeight:500}}>{n}</span>)
+        }
+        <span style={{fontSize:'0.68rem',color:'#bbb',marginLeft:2}}>▾</span>
       </div>
       {open && (
-        <div style={{position:'absolute',top:'calc(100% + 4px)',left:0,zIndex:200,background:'#fff',border:'0.5px solid #ddd',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,0.12)',padding:8,minWidth:180,maxHeight:260,overflowY:'auto'}}>
-          <div style={{fontSize:10,color:'#aaa',marginBottom:6,paddingLeft:2}}>Click to toggle</div>
+        <div style={{
+          position:'absolute',
+          ...(openUp ? {bottom:'calc(100% + 4px)'} : {top:'calc(100% + 4px)'}),
+          left:0, zIndex:200, background:'#fff', border:'0.5px solid #ddd', borderRadius:8,
+          boxShadow:'0 4px 16px rgba(0,0,0,0.12)', padding:8, minWidth:180, maxHeight:260, overflowY:'auto'
+        }}>
+          <div style={{fontSize:'0.68rem',color:'#aaa',marginBottom:6,paddingLeft:2}}>Click to toggle</div>
           {ALL_PEOPLE.map(name=>(
-            <div key={name} onClick={()=>toggle(name)} style={{display:'flex',alignItems:'center',gap:8,padding:'4px 6px',borderRadius:5,cursor:'pointer',fontSize:12,background:selected.includes(name)?'#e6f1fb':'transparent',color:selected.includes(name)?'#185FA5':'#333'}}>
+            <div key={name} onClick={()=>toggle(name)} style={{display:'flex',alignItems:'center',gap:8,padding:'4px 6px',borderRadius:5,cursor:'pointer',fontSize:'0.8rem',background:selected.includes(name)?'#e6f1fb':'transparent',color:selected.includes(name)?'#185FA5':'#333'}}>
               <div style={{width:14,height:14,borderRadius:3,border:'1.5px solid',borderColor:selected.includes(name)?'#185FA5':'#ccc',background:selected.includes(name)?'#185FA5':'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
                 {selected.includes(name)&&<span style={{color:'#fff',fontSize:9,lineHeight:1}}>✓</span>}
               </div>
@@ -155,7 +171,7 @@ function ActionBtn({title,onClick,color,children}) {
   const [hov,setHov]=useState(false);
   return (
     <button title={title} onClick={e=>{e.stopPropagation();onClick();}} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-      style={{width:19,height:19,borderRadius:3,border:'none',background:hov?color:'rgba(0,0,0,0.07)',color:hov?'#fff':'#999',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center',padding:0,lineHeight:1,transition:'all 0.1s',flexShrink:0}}>
+      style={{width:'1.3em',height:'1.3em',borderRadius:3,border:'none',background:hov?color:'rgba(0,0,0,0.07)',color:hov?'#fff':'#999',fontSize:'0.72rem',display:'flex',alignItems:'center',justifyContent:'center',padding:0,lineHeight:1,transition:'all 0.1s',flexShrink:0}}>
       {children}
     </button>
   );
@@ -173,16 +189,16 @@ function MilestoneItem({item,projectColor,onComplete,onMoveNext,onEdit,onDelete}
     <div style={{margin:'2px 0',paddingLeft:13}}>
       <input ref={inputRef} value={editVal} onChange={e=>setEditVal(e.target.value)}
         onKeyDown={e=>{if(e.key==='Enter')save();if(e.key==='Escape'){setEditVal(item.text);setEditing(false);}}} onBlur={save}
-        style={{width:'100%',fontSize:11,padding:'2px 6px',border:`1.5px solid ${projectColor}`,borderRadius:4,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}} />
+        style={{width:'100%',fontSize:'0.75rem',padding:'2px 6px',border:`1.5px solid ${projectColor}`,borderRadius:4,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}} />
     </div>
   );
   return (
     <div onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}
       style={{display:'flex',alignItems:'flex-start',gap:5,margin:'2px 0',padding:'3px 4px',borderRadius:4,background:hovered?`${projectColor}14`:'transparent',transition:'background 0.1s'}}>
-      <div style={{width:5,height:5,borderRadius:'50%',marginTop:5,flexShrink:0,background:item.done?'#ccc':projectColor,opacity:item.done?0.6:1}} />
-      <span style={{fontSize:11,lineHeight:1.45,flex:1,color:item.done?'#aaa':'#333',textDecoration:item.done?'line-through':'none',wordBreak:'break-word'}}>
+      <div style={{width:5,height:5,borderRadius:'50%',marginTop:'0.35em',flexShrink:0,background:item.done?'#ccc':projectColor,opacity:item.done?0.6:1}} />
+      <span style={{fontSize:'0.75rem',lineHeight:1.45,flex:1,color:item.done?'#aaa':'#333',textDecoration:item.done?'line-through':'none',wordBreak:'break-word'}}>
         {item.text}
-        {item.movedNext&&<span style={{fontSize:9,color:'#aaa',marginLeft:4,fontStyle:'italic'}}>→ next wk</span>}
+        {item.movedNext&&<span style={{fontSize:'0.65rem',color:'#aaa',marginLeft:4,fontStyle:'italic'}}>→ next wk</span>}
       </span>
       {hovered&&(
         <div style={{display:'flex',gap:2,flexShrink:0,alignItems:'center'}}>
@@ -219,11 +235,11 @@ function MilestoneCell({projectId,projectColor,wk,milestones,onAdd,onComplete,on
           <div style={{display:'flex',alignItems:'flex-start',gap:5}}>
             <div style={{width:5,height:5,borderRadius:'50%',marginTop:7,flexShrink:0,background:projectColor,opacity:0.4}} />
             <input ref={inputRef} value={newText} onChange={e=>setNewText(e.target.value)} onKeyDown={handleKeyDown} onBlur={handleBlur} placeholder="Add milestone…"
-              style={{flex:1,fontSize:11,padding:'2px 0',border:'none',borderBottom:`1.5px solid ${projectColor}`,outline:'none',fontFamily:'inherit',background:'transparent',lineHeight:1.4}} />
+              style={{flex:1,fontSize:'0.75rem',padding:'2px 0',border:'none',borderBottom:`1.5px solid ${projectColor}`,outline:'none',fontFamily:'inherit',background:'transparent',lineHeight:1.4}} />
           </div>
-          <div style={{fontSize:9,color:'#bbb',marginTop:3,paddingLeft:10}}>Enter to add · Esc to close</div>
+          <div style={{fontSize:'0.65rem',color:'#bbb',marginTop:3,paddingLeft:10}}>Enter to add · Esc to close</div>
         </div>
-      ):items.length===0&&<div style={{fontSize:10,color:'#ddd',paddingTop:2,paddingLeft:10}}>+ add milestone</div>}
+      ):items.length===0&&<div style={{fontSize:'0.7rem',color:'#ddd',paddingTop:2,paddingLeft:10}}>+ add milestone</div>}
     </td>
   );
 }
@@ -236,7 +252,7 @@ function HeatCell({count,maxCount,projectColor,isToday}) {
   return (
     <td style={{padding:'4px 6px',borderBottom:'0.5px solid #e5e5e5',textAlign:'center',background:isToday?'rgba(0,129,173,0.04)':'transparent',borderLeft:isToday?'2px solid #0081AD':'none',minWidth:80}}>
       <div style={{background:bg,borderRadius:6,padding:'6px 4px',minHeight:36,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
-        {count>0&&<><div style={{fontSize:16,fontWeight:500,color:'#fff',textShadow:'0 1px 2px rgba(0,0,0,0.3)'}}>{count}</div><div style={{fontSize:9,color:'rgba(255,255,255,0.8)',marginTop:1}}>tickets</div></>}
+        {count>0&&<><div style={{fontSize:'1rem',fontWeight:500,color:'#fff',textShadow:'0 1px 2px rgba(0,0,0,0.3)'}}>{count}</div><div style={{fontSize:'0.6rem',color:'rgba(255,255,255,0.8)',marginTop:1}}>tickets</div></>}
       </div>
     </td>
   );
@@ -254,43 +270,32 @@ function DragHandle() {
 }
 
 // ── Milestone view ────────────────────────────────────────────────────────────
-function MilestoneView({projects,setProjects,milestones,setMilestones,saving}) {
+function MilestoneView({projects,setProjects,milestones,setMilestones}) {
   const [weekOffset,setWeekOffset]=useState(0);
   const [colorPickerFor,setColorPickerFor]=useState(null);
   const [viewMode,setViewMode]=useState('milestones');
-  const dragIdx=useRef(null), dragOverIdx=useRef(null);
-  const [dragging,setDragging]=useState(null), [dragOver,setDragOver]=useState(null);
+  const dragIdx=useRef(null),dragOverIdx=useRef(null);
+  const [dragging,setDragging]=useState(null),[dragOver,setDragOver]=useState(null);
 
   const fridays=getFridays(weekOffset);
   const todayKey=weekKey(TODAY);
 
-  // Save projects debounced
-  const saveProjects = useCallback(async (ps) => { await dbSaveProjects(ps); }, []);
-  const debouncedSaveProjects = useDebouncedCallback(saveProjects, 800);
+  const saveProjects=useCallback(async(ps)=>{await dbSaveProjects(ps);},[]);
+  const debouncedSaveProjects=useDebouncedCallback(saveProjects,800);
+  const saveMilestonesForProject=useCallback(async(pid,weekData)=>{await dbSaveMilestones(pid,weekData);},[]);
+  const debouncedSaveMilestones=useDebouncedCallback(saveMilestonesForProject,800);
 
-  // Save milestones for a specific project debounced
-  const saveMilestonesForProject = useCallback(async (pid, weekData) => { await dbSaveMilestones(pid, weekData); }, []);
-  const debouncedSaveMilestones = useDebouncedCallback(saveMilestonesForProject, 800);
-
-  const updateProjects = (updater) => {
-    setProjects(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; debouncedSaveProjects(next); return next; });
+  const updateProjects=(updater)=>{
+    setProjects(prev=>{const next=typeof updater==='function'?updater(prev):updater;debouncedSaveProjects(next);return next;});
+  };
+  const updateMilestones=(updater,pid)=>{
+    setMilestones(prev=>{const next=typeof updater==='function'?updater(prev):updater;if(pid!==undefined)debouncedSaveMilestones(pid,next[pid]||{});return next;});
   };
 
-  const updateMilestones = (updater, pid) => {
-    setMilestones(prev => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      if (pid !== undefined) debouncedSaveMilestones(pid, next[pid] || {});
-      return next;
-    });
-  };
-
-  const addMilestone=(pid,wk,text)=>updateMilestones(prev=>{
-    const p={...(prev[pid]||{}),[wk]:[...(prev[pid]?.[wk]||[]),{id:Date.now()+Math.random(),text,done:false,movedNext:false}]};
-    return {...prev,[pid]:p};
-  },pid);
+  const addMilestone=(pid,wk,text)=>updateMilestones(prev=>({...prev,[pid]:{...(prev[pid]||{}),[wk]:[...(prev[pid]?.[wk]||[]),{id:Date.now()+Math.random(),text,done:false,movedNext:false}]}}),pid);
   const completeMilestone=(pid,wk,id)=>updateMilestones(prev=>({...prev,[pid]:{...prev[pid],[wk]:(prev[pid]?.[wk]||[]).map(m=>m.id===id?{...m,done:!m.done}:m)}}),pid);
   const moveNextMilestone=(pid,wk,id)=>updateMilestones(prev=>{
-    const p=prev[pid]||{}, item=(p[wk]||[]).find(m=>m.id===id); if(!item) return prev;
+    const p=prev[pid]||{},item=(p[wk]||[]).find(m=>m.id===id);if(!item)return prev;
     const nk=nextWeekKey(wk);
     return {...prev,[pid]:{...p,[wk]:(p[wk]||[]).map(m=>m.id===id?{...m,movedNext:true}:m),[nk]:[...(p[nk]||[]),{...item,id:Date.now()+Math.random(),movedNext:false}]}};
   },pid);
@@ -306,11 +311,11 @@ function MilestoneView({projects,setProjects,milestones,setMilestones,saving}) {
   const cleanup=()=>{dragIdx.current=null;dragOverIdx.current=null;setDragging(null);setDragOver(null);};
 
   return (
-    <div style={{padding:16}}>
+    <div style={{padding:16,paddingBottom:220}}>
       <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:16,flexWrap:'wrap'}}>
         <button className="nav-btn" onClick={()=>setWeekOffset(o=>o-6)}>‹‹</button>
         <button className="nav-btn" onClick={()=>setWeekOffset(o=>o-1)}>‹</button>
-        <span style={{fontSize:13,color:'#666',minWidth:180}}>{fmtDate(addDays(fridays[0],-4))} – {fmtDate(fridays[5])}</span>
+        <span style={{fontSize:'0.85rem',color:'#666',minWidth:180}}>{fmtDate(addDays(fridays[0],-4))} – {fmtDate(fridays[5])}</span>
         <button className="nav-btn" onClick={()=>setWeekOffset(o=>o+1)}>›</button>
         <button className="nav-btn" onClick={()=>setWeekOffset(o=>o+6)}>››</button>
         <button className="nav-btn" onClick={()=>setWeekOffset(0)} style={{background:'#0081AD',color:'#fff',borderColor:'#0081AD'}}>Today</button>
@@ -327,16 +332,16 @@ function MilestoneView({projects,setProjects,milestones,setMilestones,saving}) {
       </div>
 
       <div style={{overflowX:'auto'}}>
-        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.8rem'}}>
           <thead>
             <tr>
               <th className="col-head" style={{width:32,padding:'6px 0'}}></th>
-              <th className="col-head" style={{width:28,padding:'6px 4px',textAlign:'center',fontSize:10}}>#</th>
+              <th className="col-head" style={{width:28,padding:'6px 4px',textAlign:'center'}}>#</th>
               <th className="col-head" style={{minWidth:160}}>Project</th>
               <th className="col-head" style={{minWidth:160}}>People</th>
               {fridays.map(fri=>{const k=fmtIso(fri),isNow=k===todayKey;return(
                 <th key={k} className="col-head" style={{minWidth:viewMode==='milestones'?150:90,textAlign:'center',background:isNow?'rgba(0,129,173,0.06)':'#f8f8f6',borderLeft:isNow?'2px solid #0081AD':'none'}}>
-                  Fri {fmtDate(fri)}<br/><span style={{fontWeight:400,opacity:0.6,fontSize:10}}>Wk {getWeekNum(fri)}</span>
+                  Fri {fmtDate(fri)}<br/><span style={{fontWeight:400,opacity:0.6,fontSize:'0.68rem'}}>Wk {getWeekNum(fri)}</span>
                 </th>
               );})}
               <th className="col-head" style={{width:30}}></th>
@@ -351,7 +356,7 @@ function MilestoneView({projects,setProjects,milestones,setMilestones,saving}) {
                   style={{opacity:isDraggingThis?0.3:1,background:isDropTarget?'rgba(0,129,173,0.05)':'transparent',borderTop:isDropTarget?'2px solid #0081AD':'2px solid transparent',transition:'background 0.1s'}}>
                   <td style={{padding:0,borderBottom:'0.5px solid #e5e5e5',verticalAlign:'middle',width:32}}><DragHandle /></td>
                   <td style={{padding:'6px 4px',borderBottom:'0.5px solid #e5e5e5',verticalAlign:'top',textAlign:'center'}}>
-                    <span style={{fontSize:11,fontWeight:500,color:'#bbb'}}>{idx+1}</span>
+                    <span style={{fontSize:'0.75rem',fontWeight:500,color:'#bbb'}}>{idx+1}</span>
                   </td>
                   <td style={{padding:'8px',borderBottom:'0.5px solid #e5e5e5',verticalAlign:'top'}}>
                     <div style={{display:'flex',alignItems:'center',gap:8}}>
@@ -374,7 +379,7 @@ function MilestoneView({projects,setProjects,milestones,setMilestones,saving}) {
                     return <MilestoneCell key={k} projectId={p.id} projectColor={p.color} wk={k} milestones={milestones} onAdd={addMilestone} onComplete={completeMilestone} onMoveNext={moveNextMilestone} onEdit={editMilestone} onDelete={deleteMilestone} isToday={isNow} />;
                   })}
                   <td style={{padding:'4px',borderBottom:'0.5px solid #e5e5e5',verticalAlign:'top',textAlign:'center'}}>
-                    <button onClick={async()=>{await dbDeleteProject(p.id);updateProjects(ps=>ps.filter(x=>x.id!==p.id));}} style={{background:'none',border:'none',color:'#ccc',fontSize:14,cursor:'pointer'}}>✕</button>
+                    <button onClick={async()=>{await dbDeleteProject(p.id);updateProjects(ps=>ps.filter(x=>x.id!==p.id));}} style={{background:'none',border:'none',color:'#ccc',fontSize:'0.9rem',cursor:'pointer'}}>✕</button>
                   </td>
                 </tr>
               );
@@ -382,7 +387,7 @@ function MilestoneView({projects,setProjects,milestones,setMilestones,saving}) {
           </tbody>
         </table>
       </div>
-      <div style={{marginTop:14,display:'flex',gap:12,fontSize:11,color:'#bbb',flexWrap:'wrap',alignItems:'center'}}>
+      <div style={{marginTop:14,display:'flex',gap:12,fontSize:'0.72rem',color:'#bbb',flexWrap:'wrap',alignItems:'center'}}>
         <span>☰ Drag rows to reorder by priority</span>
         <span>· Click any cell to add milestones · Enter to add each one</span>
         <span>· Hover a milestone: <span style={{color:'#1D9E75'}}>✓</span> complete · <span style={{color:'#185FA5'}}>→</span> next week · <span style={{color:'#888'}}>✎</span> edit · <span style={{color:'#E24B4A'}}>✕</span> delete</span>
@@ -404,23 +409,19 @@ function GanttView({projects,setProjects}) {
   const pct=d=>Math.max(0,Math.min(100,((d-ganttStart)/86400000/totalDays*100)));
   const todayPct=pct(TODAY);
   const editing=projects.find(p=>p.id===editingId);
-
-  const saveAndUpdate = async (updater) => {
-    setProjects(prev => { const next=updater(prev); dbSaveProjects(next); return next; });
-  };
-
+  const saveAndUpdate=async(updater)=>{setProjects(prev=>{const next=updater(prev);dbSaveProjects(next);return next;});};
   return (
-    <div style={{padding:16}}>
-      <div style={{fontSize:12,color:'#888',marginBottom:12}}>Projects shown in priority order · Click any bar to edit its dates</div>
+    <div style={{padding:16,paddingBottom:220}}>
+      <div style={{fontSize:'0.8rem',color:'#888',marginBottom:12}}>Projects shown in priority order · Click any bar to edit its dates</div>
       {editingId&&editing&&(
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.35)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center'}}
           onClick={e=>{if(e.target===e.currentTarget)setEditingId(null);}}>
           <div style={{background:'#fff',borderRadius:12,border:'0.5px solid #ddd',padding:24,minWidth:300}}>
-            <div style={{fontWeight:500,fontSize:14,marginBottom:16}}>Edit: {editing.name}</div>
-            <label style={{fontSize:12,color:'#666',display:'block',marginBottom:4}}>Start date</label>
-            <input type="date" value={editStart} onChange={e=>setEditStart(e.target.value)} style={{width:'100%',marginBottom:12}} />
-            <label style={{fontSize:12,color:'#666',display:'block',marginBottom:4}}>Target completion</label>
-            <input type="date" value={editEnd} onChange={e=>setEditEnd(e.target.value)} style={{width:'100%',marginBottom:16}} />
+            <div style={{fontWeight:500,fontSize:'0.9rem',marginBottom:16}}>Edit: {editing.name}</div>
+            <label style={{fontSize:'0.8rem',color:'#666',display:'block',marginBottom:4}}>Start date</label>
+            <input type="date" value={editStart} onChange={e=>setEditStart(e.target.value)} style={{width:'100%',marginBottom:12,padding:'6px 8px',border:'0.5px solid #ccc',borderRadius:6}} />
+            <label style={{fontSize:'0.8rem',color:'#666',display:'block',marginBottom:4}}>Target completion</label>
+            <input type="date" value={editEnd} onChange={e=>setEditEnd(e.target.value)} style={{width:'100%',marginBottom:16,padding:'6px 8px',border:'0.5px solid #ccc',borderRadius:6}} />
             <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
               <button className="nav-btn" onClick={()=>setEditingId(null)}>Cancel</button>
               <button className="nav-btn" onClick={()=>{saveAndUpdate(ps=>ps.map(p=>p.id===editingId?{...p,startDate:editStart,endDate:editEnd}:p));setEditingId(null);}} style={{background:'#0081AD',color:'#fff',borderColor:'#0081AD'}}>Save</button>
@@ -429,7 +430,7 @@ function GanttView({projects,setProjects}) {
         </div>
       )}
       <div style={{overflowX:'auto'}}>
-        <table style={{width:'100%',borderCollapse:'collapse',fontSize:11,minWidth:700}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.78rem',minWidth:700}}>
           <thead>
             <tr>
               <th className="col-head" style={{width:28,textAlign:'center'}}>#</th>
@@ -437,7 +438,7 @@ function GanttView({projects,setProjects}) {
               <th className="col-head" style={{minWidth:120}}>People</th>
               <th className="col-head" style={{padding:0}}>
                 <div style={{display:'grid',gridTemplateColumns:months.map(m=>`${new Date(m.getFullYear(),m.getMonth()+1,0).getDate()}fr`).join(' ')}}>
-                  {months.map(m=><div key={m.toISOString()} style={{textAlign:'center',padding:'5px 2px',fontSize:10,fontWeight:500,background:'#f8f8f6'}}>
+                  {months.map(m=><div key={m.toISOString()} style={{textAlign:'center',padding:'5px 2px',fontSize:'0.68rem',fontWeight:500,background:'#f8f8f6'}}>
                     {m.toLocaleDateString('en-NZ',{month:'short'})}<br/><span style={{fontWeight:400,opacity:0.6}}>{m.getFullYear()}</span>
                   </div>)}
                 </div>
@@ -453,7 +454,7 @@ function GanttView({projects,setProjects}) {
               const endStr=end.toLocaleDateString('en-NZ',{month:'short',day:'numeric',year:'numeric'});
               return (
                 <tr key={p.id}>
-                  <td style={{padding:'6px 4px',borderBottom:'0.5px solid #e5e5e5',textAlign:'center'}}><span style={{fontSize:11,fontWeight:500,color:'#bbb'}}>{idx+1}</span></td>
+                  <td style={{padding:'6px 4px',borderBottom:'0.5px solid #e5e5e5',textAlign:'center'}}><span style={{fontSize:'0.75rem',fontWeight:500,color:'#bbb'}}>{idx+1}</span></td>
                   <td style={{padding:'6px 8px',borderBottom:'0.5px solid #e5e5e5'}}>
                     <div style={{display:'flex',alignItems:'center',gap:6}}>
                       <div style={{width:8,height:8,borderRadius:'50%',background:p.color,flexShrink:0}} />
@@ -462,22 +463,22 @@ function GanttView({projects,setProjects}) {
                   </td>
                   <td style={{padding:'6px 8px',borderBottom:'0.5px solid #e5e5e5'}}>
                     <div style={{display:'flex',flexWrap:'wrap',gap:3}}>
-                      {(p.people||[]).slice(0,4).map(n=><span key={n} style={{fontSize:10,padding:'1px 5px',borderRadius:20,background:'#e6f1fb',color:'#185FA5'}}>{n}</span>)}
-                      {(p.people||[]).length>4&&<span style={{fontSize:10,color:'#aaa'}}>+{p.people.length-4}</span>}
+                      {(p.people||[]).slice(0,4).map(n=><span key={n} style={{fontSize:'0.68rem',padding:'1px 5px',borderRadius:20,background:'#e6f1fb',color:'#185FA5'}}>{n}</span>)}
+                      {(p.people||[]).length>4&&<span style={{fontSize:'0.68rem',color:'#aaa'}}>+{p.people.length-4}</span>}
                     </div>
                   </td>
                   <td style={{padding:'4px 0',borderBottom:'0.5px solid #e5e5e5',position:'relative',height:36}}>
                     <div style={{position:'relative',height:28,margin:'0 4px'}}>
-                      <div style={{position:'absolute',left:`${left}%`,width:`${width}%`,height:20,top:4,borderRadius:3,background:overdue?'#A32D2D':p.color,opacity:overdue?0.7:1,display:'flex',alignItems:'center',padding:'0 6px',fontSize:10,color:'rgba(255,255,255,0.9)',fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',cursor:'pointer'}}
+                      <div style={{position:'absolute',left:`${left}%`,width:`${width}%`,height:20,top:4,borderRadius:3,background:overdue?'#A32D2D':p.color,opacity:overdue?0.7:1,display:'flex',alignItems:'center',padding:'0 6px',fontSize:'0.68rem',color:'rgba(255,255,255,0.9)',fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',cursor:'pointer'}}
                         onClick={()=>{setEditingId(p.id);setEditStart(p.startDate);setEditEnd(p.endDate);}}>
                         {width>8?p.name.split(' ')[0]:''}
                       </div>
                       <div style={{position:'absolute',left:`${todayPct}%`,top:0,bottom:0,width:1.5,background:'#E24B4A',opacity:0.7,pointerEvents:'none'}} />
                     </div>
                   </td>
-                  <td style={{padding:'6px 8px',borderBottom:'0.5px solid #e5e5e5',fontSize:11,whiteSpace:'nowrap',color:overdue?'#A32D2D':'inherit'}}>
+                  <td style={{padding:'6px 8px',borderBottom:'0.5px solid #e5e5e5',whiteSpace:'nowrap',color:overdue?'#A32D2D':'inherit'}}>
                     {overdue&&'⚠ '}{endStr}
-                    <button onClick={()=>{setEditingId(p.id);setEditStart(p.startDate);setEditEnd(p.endDate);}} style={{background:'none',border:'none',cursor:'pointer',color:'#bbb',fontSize:11,marginLeft:4}}>✎</button>
+                    <button onClick={()=>{setEditingId(p.id);setEditStart(p.startDate);setEditEnd(p.endDate);}} style={{background:'none',border:'none',cursor:'pointer',color:'#bbb',marginLeft:4}}>✎</button>
                   </td>
                 </tr>
               );
@@ -495,26 +496,25 @@ function App() {
   const [projects,setProjects]=useState(DEFAULT_PROJECTS);
   const [milestones,setMilestones]=useState({});
   const [loading,setLoading]=useState(true);
-  const [saving,setSaving]=useState(false);
   const [error,setError]=useState(null);
 
   useEffect(()=>{
     (async()=>{
       try {
-        const [dbProjects, dbMilestones] = await Promise.all([dbGetProjects(), dbGetMilestones()]);
+        const [dbProjects,dbMilestones]=await Promise.all([dbGetProjects(),dbGetMilestones()]);
         if(dbProjects&&dbProjects.length>0) setProjects(dbProjects.map(({_order,...p})=>p));
         if(dbMilestones) setMilestones(dbMilestones);
-      } catch(e) { setError('Could not connect to database. Changes will not be saved.'); }
+      } catch(e) { setError('Could not connect to database.'); }
       setLoading(false);
     })();
   },[]);
 
   if(loading) return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',flexDirection:'column',gap:12}}>
-      <div style={{width:32,height:32,background:'#0081AD',borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center'}}>
-        <span style={{color:'#fff',fontSize:14,fontWeight:500}}>wg</span>
+      <div style={{width:40,height:40,background:'#0081AD',borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <span style={{color:'#fff',fontSize:'1rem',fontWeight:500}}>wg</span>
       </div>
-      <div style={{fontSize:13,color:'#888'}}>Loading your projects…</div>
+      <div style={{fontSize:'0.9rem',color:'#888'}}>Loading your projects…</div>
     </div>
   );
 
@@ -522,15 +522,14 @@ function App() {
     <div style={{fontFamily:'system-ui,-apple-system,sans-serif',minHeight:'100vh',background:'#fff'}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 16px',borderBottom:'0.5px solid #e5e5e5'}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <div style={{width:32,height:32,background:'#0081AD',borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <span style={{color:'#fff',fontSize:14,fontWeight:500}}>wg</span>
+          <div style={{width:36,height:36,background:'#0081AD',borderRadius:5,display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <span style={{color:'#fff',fontSize:'0.9rem',fontWeight:500}}>wg</span>
           </div>
           <div>
-            <div style={{fontSize:14,fontWeight:500}}>wisegroup.</div>
-            <div style={{fontSize:11,color:'#888'}}>IS project tracker</div>
+            <div style={{fontSize:'0.95rem',fontWeight:500}}>wisegroup.</div>
+            <div style={{fontSize:'0.72rem',color:'#888'}}>IS project tracker</div>
           </div>
-          {saving&&<span className="saving-dot" title="Saving…" />}
-          {error&&<span style={{fontSize:11,color:'#E24B4A',marginLeft:8}}>⚠ {error}</span>}
+          {error&&<span style={{fontSize:'0.75rem',color:'#E24B4A',marginLeft:8}}>⚠ {error}</span>}
         </div>
         <div style={{display:'flex',gap:6}}>
           {[['milestone','⊞ Milestones'],['gantt','▬ Gantt']].map(([t,label])=>(
@@ -539,7 +538,7 @@ function App() {
         </div>
       </div>
       {tab==='milestone'
-        ?<MilestoneView projects={projects} setProjects={setProjects} milestones={milestones} setMilestones={setMilestones} saving={saving} />
+        ?<MilestoneView projects={projects} setProjects={setProjects} milestones={milestones} setMilestones={setMilestones} />
         :<GanttView projects={projects} setProjects={setProjects} />}
     </div>
   );
